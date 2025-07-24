@@ -115,7 +115,8 @@ def get_fsdp_wrap_policy(module, config=None, is_lora=False):
     elif fsdp_transformer_layer_cls_to_wrap is not None:
         transformer_cls_to_wrap = set()
         for layer_class in fsdp_transformer_layer_cls_to_wrap:
-            transformer_cls = get_module_class_from_name(module, layer_class)
+            # transformer_cls = get_module_class_from_name(module, layer_class)
+            transformer_cls = 'Gemma3DecoderLayer'
             if transformer_cls is None:
                 raise Exception("Could not find the transformer layer class to wrap in the model.")
             else:

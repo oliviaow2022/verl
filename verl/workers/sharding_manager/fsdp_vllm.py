@@ -281,6 +281,8 @@ class FSDPVLLMShardingManager(BaseShardingManager):
             peft_config (optional): PEFT configuration for LoRA adapters.
         """
         model = self.model_runner.model
+        if type(model).__name__ == "Gemma3ForConditionalGeneration":
+            model = model.language_model
         if peft_config:
             if self.base_sync_done:
                 lora_int_id = int(time.time_ns() % 0x7FFFFFFF)

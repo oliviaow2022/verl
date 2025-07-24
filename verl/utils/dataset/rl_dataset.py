@@ -114,7 +114,7 @@ class RLHFDataset(Dataset):
         self.chat_template_func = config.get("chat_template_func", None)
         self.need_tools_kwargs = config.get("need_tools_kwargs", False)
         self.filter_prompts = config.get("filter_prompts", True)
-        self.serialize_dataset = False
+        self.serialize_dataset = True
         self.return_multi_modal_inputs = config.get("return_multi_modal_inputs", True)
 
         self._download()
@@ -180,10 +180,10 @@ class RLHFDataset(Dataset):
         # resume dataframe if not it's serialized in data.pt
         if not self.serialize_dataset:
             self._download(use_origin_parquet=True)  # download and resume from original parquet files
-            self._read_files_and_tokenize()
         else:
             print(r"old dataloader ckpt file is used, please train from scratch for better ckpt performance")
-
+        self._read_files_and_tokenize()
+        
     def __len__(self):
         return len(self.dataframe)
 

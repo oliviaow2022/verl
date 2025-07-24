@@ -159,8 +159,7 @@ class vLLMRollout(BaseRollout):
         #    (which can vary across different vLLM versions);
         # - Otherwise it's the desired value we want to explicitly set.
         engine_kwargs = {key: val for key, val in engine_kwargs.items() if val is not None}
-        if config.get("limit_images", None):  # support for multi-image data
-            engine_kwargs["limit_mm_per_prompt"] = {"image": config.get("limit_images")}
+        engine_kwargs["limit_mm_per_prompt"] = {"image": 0}
 
         self.inference_engine = LLM(
             model=model_path,
