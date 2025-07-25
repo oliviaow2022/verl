@@ -653,7 +653,7 @@ class RayPPOTrainer:
 
         print(f"Dumped generations to {filename}")
 
-    def _maybe_log_val_generations(self, inputs, outputs, scores):
+    def _maybe_log_val_generations(self, inputs, outputs, scores, ground_truths):
         """Log a table of validation samples to the configured logger (wandb or swanlab)"""
 
         generations_to_log = self.config.trainer.log_val_generations
@@ -664,7 +664,7 @@ class RayPPOTrainer:
         import numpy as np
 
         # Create tuples of (input, output, score) and sort by input text
-        samples = list(zip(inputs, outputs, scores, strict=True))
+        samples = list(zip(inputs, outputs, scores, ground_truths, strict=True))
         samples.sort(key=lambda x: x[0])  # Sort by input text
 
         # Use fixed random seed for deterministic shuffling
@@ -686,6 +686,7 @@ class RayPPOTrainer:
         sample_outputs = []
         sample_scores = []
         sample_turns = []
+        sample_groundtruths = []
 
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
@@ -705,6 +706,15 @@ class RayPPOTrainer:
             input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
             sample_inputs.extend(input_texts)
 
+            # Store original ground truths
+            if "reward_model" in test_batch.non_tensor_batch:
+                reward_models = test_batch.non_tensor_batch["reward_model"]
+                for rm in reward_models:
+                    if "ground_truth" in rm:
+                        sample_groundtruths.append(rm["ground_truth"])
+                    else:
+                        sample_groundtruths.append("")
+                        
             batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
             non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
             if "multi_modal_data" in test_batch.non_tensor_batch:
@@ -776,7 +786,7 @@ class RayPPOTrainer:
 
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
 
-        self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
+        self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores, ground_truths=sample_groundtruths)
 
         # dump generations
         val_data_dir = self.config.trainer.get("validation_data_dir", None)
@@ -785,6 +795,7 @@ class RayPPOTrainer:
                 inputs=sample_inputs,
                 outputs=sample_outputs,
                 scores=sample_scores,
+                ground_truths=sample_groundtruths,
                 reward_extra_infos_dict=reward_extra_infos_dict,
                 dump_path=val_data_dir,
             )
