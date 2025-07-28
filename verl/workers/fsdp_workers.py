@@ -1021,6 +1021,7 @@ class CriticWorker(Worker, DistProfilerExtension):
             attn_implementation="flash_attention_2",
             trust_remote_code=config.model.get("trust_remote_code", False),
         )
+        critic_model_config = critic_model_config.text_config
         critic_model_config.num_labels = 1
         # patch for kimi-vl
         if getattr(critic_model_config, "model_type", None) == "kimi_vl":
