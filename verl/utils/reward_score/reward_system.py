@@ -1,10 +1,15 @@
+import os
+
+import backoff
 import requests
 from dotenv import load_dotenv
-import os
+from ratelimit import limits, sleep_and_retry
 
 load_dotenv()
 
-
+@sleep_and_retry
+@limits(calls=1, period=1)
+@backoff.on_exception(backoff.expo, requests.exceptions.RequestException, max_tries=None)
 def get_reward_score(
     instruction: str,
     response: str,
