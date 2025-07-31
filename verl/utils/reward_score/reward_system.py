@@ -1,15 +1,16 @@
 import os
 
-import backoff
 import requests
 from dotenv import load_dotenv
-from ratelimit import limits, sleep_and_retry
+from concurrent.futures import ThreadPoolExecutor
+
+MAX_RETRIES = 3
+BASE_DELAY = 10
+MAX_WORKERS = 16
+TIMEOUT = 600
 
 load_dotenv()
 
-@sleep_and_retry
-@limits(calls=1, period=1)
-@backoff.on_exception(backoff.expo, requests.exceptions.RequestException, max_tries=None)
 def get_reward_score(
     instruction: str,
     response: str,
@@ -30,7 +31,7 @@ def get_reward_score(
     Returns:
         float: Reward score returned by
     """
-
+    
     payload = {
         "instruction": instruction,
         "response": response,
@@ -48,7 +49,7 @@ def get_reward_score(
     API_URL = os.getenv("API_URL")
 
     try:
-        res = requests.post(API_URL, json=payload)
+        res = requests.post(API_URL, json=payload, timeout=TIMEOUT)
         res.raise_for_status()
         data = res.json()
         reward = data.get("final_eval_score")
@@ -57,4 +58,42 @@ def get_reward_score(
         return reward
     except Exception as e:
         print(f"[RewardAPI Error] {e}")
-        return 0.0  # Fallback reward
+        return 5.0  # Fallback reward
+
+def get_reward_score_batch(
+    instructions: list[str],
+    responses: list[str],
+    ground_truths: list[str],
+    agents_to_force_enable_list: list[list[str]] = None,
+    agents_to_force_disable_list: list[list[str]] = None,
+    extra_infos: list = None,
+) -> list[float]:
+    """
+    Batch version with threading for parallel calls.
+    """
+    print("in get_reward_score_batch")
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = []
+        for i, instruction in enumerate(instructions):
+            agents_enable = (
+                agents_to_force_enable_list[i] if agents_to_force_enable_list else None
+            )
+            agents_disable = (
+                agents_to_force_disable_list[i] if agents_to_force_disable_list else None
+            )
+            extra_info = extra_infos[i] if extra_infos else None
+
+            futures.append(
+                executor.submit(
+                    get_reward_score,
+                    instruction,
+                    responses[i],
+                    ground_truths[i],
+                    agents_enable,
+                    agents_disable,
+                    extra_info,
+                )
+            )
+
+        results = [future.result() for future in futures]
+    return results

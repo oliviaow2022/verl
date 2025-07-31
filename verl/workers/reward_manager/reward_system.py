@@ -28,7 +28,7 @@ class RewardSystemRewardManager:
         self.reward_fn_key = reward_fn_key  # Store the key for accessing the data source
 
     def __call__(self, data: DataProto, return_dict=False):
-        """We will expand this function gradually based on the available datasets"""
+        """Batch Scoring"""
 
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
         if "rm_scores" in data.batch.keys():
@@ -39,6 +39,12 @@ class RewardSystemRewardManager:
 
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
+        
+        instructions = []
+        responses = []
+        ground_truths = []
+        extra_infos = []
+        data_sources = []
 
         already_print_data_sources = {}
 
@@ -65,26 +71,40 @@ class RewardSystemRewardManager:
             extra_info = data_item.non_tensor_batch.get("extra_info", {})
             num_turns = data_item.non_tensor_batch.get("__num_turns__", None)
             extra_info["num_turns"] = num_turns
+            
+            # Collect inputs for batch scoring
+            instructions.append(prompt_str)
+            responses.append(response_str)
+            ground_truths.append(ground_truth)
+            extra_infos.append(extra_info)
+            data_sources.append(data_source)
 
-            score = self.compute_score(
-                instruction=prompt_str,
-                response=response_str,
-                ground_truth=ground_truth,
-                agents_to_force_enable=None,
-                agents_to_force_disable=None,
-                extra_info=extra_info,
-            )
+        scores = self.compute_score(
+            instructions=instructions,
+            responses=responses,
+            ground_truths=ground_truths,
+            agents_to_force_enable_list=None,
+            agents_to_force_disable_list=None,
+            extra_infos=extra_infos,
+        )
+
+        for i, score in enumerate(scores):
+            data_item = data[i]
+            prompt_ids = data_item.batch["prompts"]
+            prompt_length = prompt_ids.shape[-1]
+            valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
 
             reward_tensor[i, valid_response_length - 1] = score
 
+            data_source = data_sources[i]
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
 
             if already_print_data_sources[data_source] < self.num_examine:
                 already_print_data_sources[data_source] += 1
-                print("[prompt]", prompt_str)
-                print("[response]", response_str)
-                print("[ground_truth]", ground_truth)
+                print("[prompt]", instructions[i])
+                print("[response]", responses[i])
+                print("[ground_truth]", ground_truths[i])
                 if isinstance(score, dict):
                     for key, value in score.items():
                         print(f"[{key}]", value)
